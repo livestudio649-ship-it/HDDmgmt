@@ -3,7 +3,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Download, Upload, Trash2, AlertTriangle } from 'lucide-react';
+import { Download, Upload, Trash2, AlertTriangle, Shield } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,9 +16,57 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { exportAllData, importData, clearAllData } from '@/lib/storage';
+import DataPasswordModal from '@/components/DataPasswordModal';
 
 const DataManagement = () => {
   const [importing, setImporting] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'export' | 'import' | 'clear' | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const requestExport = () => {
+    setPendingAction('export');
+    setPasswordModalOpen(true);
+  };
+
+  const requestImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setPendingFile(file);
+    setPendingAction('import');
+    setPasswordModalOpen(true);
+    
+    // Reset the input
+    event.target.value = '';
+  };
+
+  const requestClear = () => {
+    setPendingAction('clear');
+    setPasswordModalOpen(true);
+  };
+
+  const handlePasswordSuccess = () => {
+    setPasswordModalOpen(false);
+    
+    if (pendingAction === 'export') {
+      handleExport();
+    } else if (pendingAction === 'import' && pendingFile) {
+      handleImport(pendingFile);
+    } else if (pendingAction === 'clear') {
+      handleClearAll();
+    }
+    
+    // Reset pending states
+    setPendingAction(null);
+    setPendingFile(null);
+  };
+
+  const handlePasswordCancel = () => {
+    setPasswordModalOpen(false);
+    setPendingAction(null);
+    setPendingFile(null);
+  };
 
   const handleExport = () => {
     try {
@@ -38,10 +86,7 @@ const DataManagement = () => {
     }
   };
 
-  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const handleImport = (file: File) => {
     setImporting(true);
     const reader = new FileReader();
 
@@ -86,10 +131,20 @@ const DataManagement = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={handleExport}>
-              <Download className="w-4 h-4 mr-2" />
-              Export All Data
-            </Button>
+            <div className="space-y-4">
+              <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-300 dark:border-blue-700 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-100 flex items-start gap-2">
+                  <Shield className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                  <span>
+                    <strong>Password Protected:</strong> Master password required to export sensitive business data.
+                  </span>
+                </p>
+              </div>
+              <Button onClick={requestExport}>
+                <Download className="w-4 h-4 mr-2" />
+                Export All Data
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -113,11 +168,19 @@ const DataManagement = () => {
                   </span>
                 </p>
               </div>
+              <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-300 dark:border-blue-700 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-100 flex items-start gap-2">
+                  <Shield className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                  <span>
+                    <strong>Password Protected:</strong> Master password required to import data and overwrite existing records.
+                  </span>
+                </p>
+              </div>
               <div>
                 <input
                   type="file"
                   accept=".json"
-                  onChange={handleImport}
+                  onChange={requestImport}
                   className="hidden"
                   id="import-file"
                 />
@@ -152,6 +215,14 @@ const DataManagement = () => {
                   </span>
                 </p>
               </div>
+              <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-300 dark:border-blue-700 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-100 flex items-start gap-2">
+                  <Shield className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                  <span>
+                    <strong>Password Protected:</strong> Master password required to clear all business data permanently.
+                  </span>
+                </p>
+              </div>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive">
@@ -168,7 +239,7 @@ const DataManagement = () => {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleClearAll} className="bg-destructive hover:bg-destructive/90">
+                    <AlertDialogAction onClick={requestClear} className="bg-destructive hover:bg-destructive/90">
                       Yes, delete everything
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -177,6 +248,14 @@ const DataManagement = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Password Modal */}
+        <DataPasswordModal
+          open={passwordModalOpen}
+          onClose={handlePasswordCancel}
+          onSuccess={handlePasswordSuccess}
+          action={pendingAction || 'export'}
+        />
       </div>
     </DashboardLayout>
   );
