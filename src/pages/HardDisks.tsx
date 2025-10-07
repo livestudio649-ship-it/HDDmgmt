@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Plus, Search, Trash2, RefreshCw, Edit, Save, X, PackageCheck, Eye, EyeOff } from 'lucide-react';
+import { Plus, Search, Trash2, Edit, Save, X, PackageCheck, Eye, EyeOff } from 'lucide-react';
 import { 
   getHardDiskRecords, 
   saveHardDiskRecords, 
@@ -239,17 +239,12 @@ const HardDisks = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="jobId">Job ID</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="jobId"
-                      value={formData.jobId}
-                      readOnly
-                      className="bg-muted"
-                    />
-                    <Button type="button" size="icon" variant="outline" onClick={generateJobId}>
-                      <RefreshCw className="w-4 h-4" />
-                    </Button>
-                  </div>
+                  <Input
+                    id="jobId"
+                    value={formData.jobId}
+                    readOnly
+                    className="bg-muted"
+                  />
                 </div>
 
                 <div className="space-y-2">
