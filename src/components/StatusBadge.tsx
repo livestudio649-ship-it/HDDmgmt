@@ -30,7 +30,10 @@ const StatusBadge = ({
     toast.success(`Status updated to ${STATUS_CONFIG[newStatus].label}`);
     setIsEditing(false);
     if (onStatusChange) {
-      onStatusChange();
+      // Add a small delay to ensure the status update is processed
+      setTimeout(() => {
+        onStatusChange();
+      }, 100);
     }
   };
 
