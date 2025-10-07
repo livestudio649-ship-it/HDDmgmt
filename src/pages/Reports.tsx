@@ -7,11 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { FileDown, Search, Calendar, TrendingUp, Package, Clock, CheckCircle2, AlertCircle, Eye, X } from 'lucide-react';
-import { getDeliveryReports } from '@/lib/storage';
+import { FileDown, Search, Calendar, TrendingUp, Package, Clock, CheckCircle2, AlertCircle, Eye, X, Download, Upload, Trash2, Shield } from 'lucide-react';
+import { getDeliveryReports, exportAllData, importData, clearAllData } from '@/lib/storage';
 import { DELIVERY_MODE_OPTIONS, STATUS_CONFIG, RECORD_STATUS } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
 import { Badge } from '@/components/ui/badge';
+import DataPasswordModal from '@/components/DataPasswordModal';
+import { toast } from 'sonner';
 
 interface DeliveryReport {
   id: number;
@@ -45,6 +47,12 @@ const Reports = () => {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [detailDialogType, setDetailDialogType] = useState<'delivered' | 'completed' | 'in_progress' | 'pending'>('delivered');
   const [detailDialogRecords, setDetailDialogRecords] = useState<DeliveryReport[]>([]);
+
+  // Data management state
+  const [importing, setImporting] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'export' | 'import' | 'clear' | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   useEffect(() => {
     loadReports();
@@ -98,6 +106,99 @@ const Reports = () => {
   const loadReports = () => {
     const data = getDeliveryReports();
     setReports(data);
+  };
+
+  // Data management functions
+  const requestExport = () => {
+    setPendingAction('export');
+    setPasswordModalOpen(true);
+  };
+
+  const requestImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setPendingFile(file);
+    setPendingAction('import');
+    setPasswordModalOpen(true);
+    
+    // Reset the input
+    event.target.value = '';
+  };
+
+  const requestClear = () => {
+    setPendingAction('clear');
+    setPasswordModalOpen(true);
+  };
+
+  const handlePasswordSuccess = () => {
+    setPasswordModalOpen(false);
+    
+    if (pendingAction === 'export') {
+      handleExport();
+    } else if (pendingAction === 'import' && pendingFile) {
+      handleImport(pendingFile);
+    } else if (pendingAction === 'clear') {
+      handleClearAll();
+    }
+    
+    // Reset pending states
+    setPendingAction(null);
+    setPendingFile(null);
+  };
+
+  const handlePasswordCancel = () => {
+    setPasswordModalOpen(false);
+    setPendingAction(null);
+    setPendingFile(null);
+  };
+
+  const handleExport = () => {
+    try {
+      const data = exportAllData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `data-recovery-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Data exported successfully');
+    } catch (error) {
+      toast.error('Failed to export data');
+    }
+  };
+
+  const handleImport = (file: File) => {
+    setImporting(true);
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        importData(data);
+        toast.success('Data imported successfully');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } catch (error) {
+        toast.error('Invalid file format');
+      } finally {
+        setImporting(false);
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
+  const handleClearAll = () => {
+    clearAllData();
+    toast.success('All data cleared');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   };
 
   // Calculate filtered reports with search and filters
@@ -324,6 +425,95 @@ const Reports = () => {
           })}
         </div>
 
+        {/* Data Management Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-blue-600" />
+              Database Management
+            </CardTitle>
+            <CardDescription>
+              Export, import, and manage your complete database records
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Export Data */}
+              <div className="space-y-3">
+                <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Download className="w-4 h-4 text-green-600" />
+                    <span className="font-medium text-green-900 dark:text-green-100 text-sm">Export Database</span>
+                  </div>
+                  <p className="text-xs text-green-700 dark:text-green-300 mb-3">
+                    Download complete backup of all records, customers, and settings
+                  </p>
+                  <Button onClick={requestExport} size="sm" className="w-full bg-green-600 hover:bg-green-700">
+                    <Download className="w-3 h-3 mr-2" />
+                    Export All Data
+                  </Button>
+                </div>
+              </div>
+
+              {/* Import Data */}
+              <div className="space-y-3">
+                <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Upload className="w-4 h-4 text-blue-600" />
+                    <span className="font-medium text-blue-900 dark:text-blue-100 text-sm">Import Database</span>
+                  </div>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+                    Restore from backup file (overwrites existing data)
+                  </p>
+                  <div>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={requestImport}
+                      className="hidden"
+                      id="reports-import-file"
+                    />
+                    <Button asChild size="sm" className="w-full bg-blue-600 hover:bg-blue-700" disabled={importing}>
+                      <label htmlFor="reports-import-file" className="cursor-pointer">
+                        <Upload className="w-3 h-3 mr-2" />
+                        {importing ? 'Importing...' : 'Import Data'}
+                      </label>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Clear Data */}
+              <div className="space-y-3">
+                <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                    <span className="font-medium text-red-900 dark:text-red-100 text-sm">Clear Database</span>
+                  </div>
+                  <p className="text-xs text-red-700 dark:text-red-300 mb-3">
+                    Permanently delete all records and reset system
+                  </p>
+                  <Button onClick={requestClear} size="sm" variant="destructive" className="w-full">
+                    <Trash2 className="w-3 h-3 mr-2" />
+                    Clear All Data
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Security Notice */}
+            <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <p className="text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                <Shield className="w-3 h-3 mt-0.5 flex-shrink-0 text-amber-600" />
+                <span>
+                  <strong>Security Protected:</strong> All database operations require master password verification. 
+                  Contact Swaz Data Recovery Labs (+919701087446) for password assistance.
+                </span>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Date Range & Filters */}
         <Card>
           <CardHeader>
@@ -538,8 +728,9 @@ const Reports = () => {
       </div>
 
       {/* Detail Dialog */}
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+      {detailDialogOpen && (
+        <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+          <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {detailDialogType === 'delivered' && (
@@ -718,6 +909,16 @@ const Reports = () => {
           </div>
         </DialogContent>
       </Dialog>
+      )}
+
+      {/* Password Modal */}
+      <DataPasswordModal
+        open={passwordModalOpen}
+        onClose={handlePasswordCancel}
+        onSuccess={handlePasswordSuccess}
+        action={pendingAction || 'export'}
+      />
+      </div>
     </DashboardLayout>
   );
 };
