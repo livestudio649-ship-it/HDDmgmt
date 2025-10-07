@@ -380,13 +380,13 @@ const HardDisks = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="estimatedAmount">Estimated Amount (₹)</Label>
+                  <Label htmlFor="estimatedAmount">Manual Amount Override</Label>
                   <Input
                     id="estimatedAmount"
                     type="number"
                     value={formData.estimatedAmount || ''}
                     onChange={(e) => setFormData({ ...formData, estimatedAmount: e.target.value ? parseFloat(e.target.value) : undefined })}
-                    placeholder="Enter estimated cost"
+                    placeholder="Leave empty for automatic calculation"
                   />
                 </div>
 
