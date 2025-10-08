@@ -349,7 +349,7 @@ const EstimateDialog = ({ record, open, onClose, onSave }: EstimateDialogProps) 
           {/* A4 Print Area (preview) */}
           <div className="w-full flex justify-center">
             <div className="a4-scale-wrap" style={{ transform: `scale(${scale})`, transformOrigin: 'top left', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}>
-              <div ref={pageRef} id="estimate-print" className="bg-white text-black print:p-0" style={{ width: '210mm', padding: '15mm', boxSizing: 'border-box' }}>
+              <div ref={pageRef} id="estimate-print" className="bg-white text-black print:p-0" style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box' }}>
                 {/* Company Header with Logo */}
                 <div className="text-center mb-8 pb-6 border-b-2 border-gray-800">
                   <LogoImage className="mx-auto mb-4 h-20" alt={`${companyDetails.companyName} Logo`} />
@@ -571,7 +571,7 @@ const EstimateDialog = ({ record, open, onClose, onSave }: EstimateDialogProps) 
                       <p><span className="font-semibold">Payment Terms:</span> 50% advance, balance on completion</p>
                       <p><span className="font-semibold">Accepted Methods:</span> Bank Transfer, UPI, Cheque</p>
                     </div>
-                    {(companyDetails.bankAccountName || companyDetails.bankAccountNumber || companyDetails.bankName || companyDetails.bankIFSC) && (
+                    {(companyDetails.bankAccountName || companyDetails.bankAccountNumber || companyDetails.bankName || companyDetails.bankIFSC) ? (
                       <div className="space-y-1">
                         <h4 className="font-semibold text-gray-900 mb-2">Bank Details:</h4>
                         {companyDetails.bankAccountName && (
@@ -589,6 +589,13 @@ const EstimateDialog = ({ record, open, onClose, onSave }: EstimateDialogProps) 
                         {companyDetails.bankIFSC && (
                           <p><span className="font-medium">IFSC Code:</span> {companyDetails.bankIFSC}</p>
                         )}
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <h4 className="font-semibold text-gray-900 mb-2">Bank Details:</h4>
+                        <p className="text-sm text-gray-500 italic">
+                          Configure bank details in Settings to display payment information
+                        </p>
                       </div>
                     )}
                   </div>
@@ -678,10 +685,17 @@ const EstimateDialog = ({ record, open, onClose, onSave }: EstimateDialogProps) 
               display: none !important;
             }
             
-            /* Completely prevent page 2 */
+            /* Completely prevent page 2 and beyond */
             @page:nth(2) {
               display: none !important;
               size: 0 !important;
+              margin: 0 !important;
+            }
+            
+            @page:nth(n+2) {
+              display: none !important;
+              size: 0 !important;
+              margin: 0 !important;
             }
             
             * {
@@ -753,11 +767,11 @@ const EstimateDialog = ({ record, open, onClose, onSave }: EstimateDialogProps) 
               display: block !important;
               position: static !important;
               width: 210mm !important;
-              padding: 8mm !important;
+              padding: 5mm !important;
               margin: 0 !important;
               box-sizing: border-box !important;
-              font-size: 7pt !important;
-              line-height: 1.0 !important;
+              font-size: 6pt !important;
+              line-height: 0.85 !important;
               page-break-inside: avoid !important;
               page-break-after: avoid !important;
               page-break-before: avoid !important;
@@ -765,9 +779,11 @@ const EstimateDialog = ({ record, open, onClose, onSave }: EstimateDialogProps) 
               break-before: avoid !important;
               break-inside: avoid !important;
               overflow: hidden !important;
-              max-height: 275mm !important;
-              height: 275mm !important;
-              contain: layout style paint !important;
+              max-height: 287mm !important;
+              height: 287mm !important;
+              contain: layout style paint size !important;
+              transform: scale(0.98) !important;
+              transform-origin: top left !important;
             }
             
             /* Absolutely prevent any page breaks */
@@ -798,6 +814,38 @@ const EstimateDialog = ({ record, open, onClose, onSave }: EstimateDialogProps) 
               margin-bottom: 0 !important;
               padding-bottom: 0 !important;
               border-bottom: none !important;
+            }
+            
+            /* Force content to fit within page boundaries */
+            #estimate-print {
+              position: relative !important;
+            }
+            
+            #estimate-print::after {
+              content: "" !important;
+              position: absolute !important;
+              bottom: 0 !important;
+              left: 0 !important;
+              right: 0 !important;
+              height: 10mm !important;
+              background: linear-gradient(transparent, white) !important;
+              pointer-events: none !important;
+            }
+            
+            /* Ensure no content can overflow to create a second page */
+            @media print {
+              html, body {
+                overflow: hidden !important;
+                max-height: 297mm !important;
+              }
+              
+              * {
+                max-height: none !important;
+              }
+              
+              #estimate-print * {
+                max-height: fit-content !important;
+              }
             }
             
             /* Reset transforms on all print content */
@@ -885,65 +933,65 @@ const EstimateDialog = ({ record, open, onClose, onSave }: EstimateDialogProps) 
             
             /* Ultra-compact spacing for print */
             #estimate-print .mb-8 {
-              margin-bottom: 2pt !important;
-            }
-            
-            #estimate-print .mb-6 {
               margin-bottom: 1.5pt !important;
             }
             
-            #estimate-print .mb-4 {
+            #estimate-print .mb-6 {
               margin-bottom: 1pt !important;
+            }
+            
+            #estimate-print .mb-4 {
+              margin-bottom: 0.8pt !important;
             }
             
             #estimate-print .mb-3 {
-              margin-bottom: 1pt !important;
+              margin-bottom: 0.6pt !important;
             }
             
             #estimate-print .mb-2 {
-              margin-bottom: 0.5pt !important;
+              margin-bottom: 0.4pt !important;
             }
             
             #estimate-print .pb-6 {
-              padding-bottom: 1pt !important;
+              padding-bottom: 0.8pt !important;
             }
             
             #estimate-print .p-6 {
-              padding: 1.5pt !important;
+              padding: 1pt !important;
             }
             
             #estimate-print .p-4 {
-              padding: 1pt !important;
+              padding: 0.8pt !important;
             }
             
             #estimate-print .p-3 {
-              padding: 1pt !important;
+              padding: 0.6pt !important;
             }
             
             #estimate-print .p-2 {
-              padding: 0.5pt !important;
+              padding: 0.4pt !important;
             }
             
             #estimate-print .py-3 {
-              padding-top: 1pt !important;
-              padding-bottom: 1pt !important;
+              padding-top: 0.6pt !important;
+              padding-bottom: 0.6pt !important;
             }
             
             #estimate-print .px-4 {
-              padding-left: 1pt !important;
-              padding-right: 1pt !important;
+              padding-left: 0.8pt !important;
+              padding-right: 0.8pt !important;
             }
             
             #estimate-print .mt-16 {
-              margin-top: 3pt !important;
-            }
-            
-            #estimate-print .mt-8 {
               margin-top: 2pt !important;
             }
             
+            #estimate-print .mt-8 {
+              margin-top: 1.5pt !important;
+            }
+            
             #estimate-print .mt-4 {
-              margin-top: 1pt !important;
+              margin-top: 0.8pt !important;
             }
             
             #estimate-print .mt-3 {
@@ -952,6 +1000,65 @@ const EstimateDialog = ({ record, open, onClose, onSave }: EstimateDialogProps) 
             
             #estimate-print .pt-6 {
               padding-top: 2pt !important;
+            }
+            
+            /* Specific font size optimizations for estimate elements */
+            #estimate-print h1 {
+              font-size: 10pt !important;
+              margin-bottom: 0.5pt !important;
+            }
+            
+            #estimate-print h2 {
+              font-size: 8pt !important;
+              margin-bottom: 0.4pt !important;
+            }
+            
+            #estimate-print .text-4xl {
+              font-size: 10pt !important;
+            }
+            
+            #estimate-print .text-3xl {
+              font-size: 8pt !important;
+            }
+            
+            #estimate-print .text-2xl {
+              font-size: 7pt !important;
+            }
+            
+            #estimate-print .text-xl {
+              font-size: 6.5pt !important;
+            }
+            
+            #estimate-print .text-lg {
+              font-size: 6pt !important;
+            }
+            
+            #estimate-print .text-base {
+              font-size: 5.5pt !important;
+            }
+            
+            #estimate-print .text-sm {
+              font-size: 5pt !important;
+            }
+            
+            #estimate-print .text-xs {
+              font-size: 4.5pt !important;
+            }
+            
+            /* Logo size optimization */
+            #estimate-print .h-20 {
+              height: 40pt !important;
+            }
+            
+            /* Table optimizations */
+            #estimate-print table {
+              font-size: 6pt !important;
+            }
+            
+            #estimate-print th,
+            #estimate-print td {
+              padding: 1pt 2pt !important;
+              line-height: 1.1 !important;
             }
             
             #estimate-print .pt-2 {

@@ -443,7 +443,7 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
                   <p><span className="font-semibold">Payment Terms:</span> Due within 30 days from invoice date</p>
                   <p><span className="font-semibold">Accepted Methods:</span> Bank Transfer, UPI, Cheque</p>
                 </div>
-                {(companyDetails.bankAccountName || companyDetails.bankAccountNumber || companyDetails.bankName || companyDetails.bankIFSC) && (
+                {(companyDetails.bankAccountName || companyDetails.bankAccountNumber || companyDetails.bankName || companyDetails.bankIFSC) ? (
                   <div className="space-y-1">
                     <h4 className="font-semibold text-gray-900 mb-2">Bank Details:</h4>
                     {companyDetails.bankAccountName && (
@@ -461,6 +461,13 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
                     {companyDetails.bankIFSC && (
                       <p><span className="font-medium">IFSC Code:</span> {companyDetails.bankIFSC}</p>
                     )}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <h4 className="font-semibold text-gray-900 mb-2">Bank Details:</h4>
+                    <p className="text-sm text-gray-500 italic">
+                      Configure bank details in Settings to display payment information
+                    </p>
                   </div>
                 )}
               </div>
