@@ -148,7 +148,7 @@ const Outward = () => {
                                 onStatusChange={loadRecords}
                                 showDate={true}
                                 completedDate={record.completedDate}
-                                editable={true}
+                                editable={false}
                               />
                             );
                           })()}

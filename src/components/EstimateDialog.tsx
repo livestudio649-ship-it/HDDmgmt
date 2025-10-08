@@ -31,9 +31,10 @@ interface EstimateDialogProps {
   record: InwardRecord;
   open: boolean;
   onClose: () => void;
+  onSave?: () => void;
 }
 
-const EstimateDialog = ({ record, open, onClose }: EstimateDialogProps) => {
+const EstimateDialog = ({ record, open, onClose, onSave }: EstimateDialogProps) => {
   const [hardDisk, setHardDisk] = useState<any>(null);
   const [estimateNumber, setEstimateNumber] = useState('');
   const [baseAmount, setBaseAmount] = useState(0);
@@ -55,40 +56,64 @@ const EstimateDialog = ({ record, open, onClose }: EstimateDialogProps) => {
   const currentDate = new Date();
 
   useEffect(() => {
-    if (open) {
-      const hardDisks = getHardDiskRecords();
-      const hd = hardDisks.find((h) => h.jobId === record.jobId);
-      setHardDisk(hd);
+    if (open && record) {
+      try {
+        const hardDisks = getHardDiskRecords();
+        const hd = hardDisks.find((h) => h.jobId === record.jobId);
+        setHardDisk(hd);
 
-      // Check if estimate already exists
-      const existingEstimate = getEstimateByJobId(record.jobId);
-      
-      if (existingEstimate) {
-        // Load existing estimate data
-        setEstimateNumber(existingEstimate.estimateNumber);
-        setBaseAmount(existingEstimate.baseAmount);
-        setDiagnosticFee(existingEstimate.diagnosticFee);
-        setManualAmount(existingEstimate.manualAmount);
-        setValidityDays(existingEstimate.validityDays);
-        setCustomTerms(existingEstimate.customTerms || '');
-        setIsSaved(true);
-      } else {
-        // Generate new estimate
-        setEstimateNumber(generateNextEstimateNumber());
-        setIsSaved(false);
+        // Check if estimate already exists
+        const existingEstimate = getEstimateByJobId(record.jobId);
+        
+        if (existingEstimate) {
+          // Load existing estimate data
+          setEstimateNumber(existingEstimate.estimateNumber);
+          setBaseAmount(existingEstimate.baseAmount || 0);
+          setDiagnosticFee(existingEstimate.diagnosticFee || 500);
+          setManualAmount(existingEstimate.manualAmount || null);
+          setValidityDays(existingEstimate.validityDays || 30);
+          setCustomTerms(existingEstimate.customTerms || '');
+          setIsSaved(true);
+        } else {
+          // Generate new estimate
+          setEstimateNumber(generateNextEstimateNumber());
+          setIsSaved(false);
 
-        if (hd) {
-          const capacityValue = parseInt(hd.capacity);
-          const baseRate = hd.capacity.includes('TB') ? capacityValue * 2000 : capacityValue * 2;
-          setBaseAmount(baseRate);
+          if (hd && hd.capacity) {
+            try {
+              const capacityValue = parseInt(hd.capacity);
+              if (!isNaN(capacityValue)) {
+                const baseRate = hd.capacity.includes('TB') ? capacityValue * 2000 : capacityValue * 2;
+                setBaseAmount(baseRate);
+              } else {
+                setBaseAmount(5000); // Default amount if capacity parsing fails
+              }
+            } catch (error) {
+              console.warn('Error parsing capacity:', hd.capacity, error);
+              setBaseAmount(5000); // Default amount
+            }
+          } else {
+            setBaseAmount(5000); // Default amount if no hard disk found
+          }
+
+          // Load default terms for estimate
+          try {
+            const templates = getTermsTemplates();
+            const defaultTemplate = templates.find((t) => t.isDefault && t.name.includes('Estimate'));
+            if (defaultTemplate) {
+              setCustomTerms(defaultTemplate.content);
+            }
+          } catch (error) {
+            console.warn('Error loading terms templates:', error);
+          }
         }
-
-        // Load default terms for estimate
-        const templates = getTermsTemplates();
-        const defaultTemplate = templates.find((t) => t.isDefault && t.name.includes('Estimate'));
-        if (defaultTemplate) {
-          setCustomTerms(defaultTemplate.content);
-        }
+      } catch (error) {
+        console.error('Error initializing estimate dialog:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load estimate data. Please try again.",
+          variant: "destructive",
+        });
       }
     }
   }, [open, record]);
@@ -200,6 +225,18 @@ const EstimateDialog = ({ record, open, onClose }: EstimateDialogProps) => {
       setIsSaved(true);
       setValidationErrors([]);
       
+      // Call parent refresh callback immediately
+      if (onSave) {
+        onSave();
+      }
+      
+      // Additional refresh after delay to handle buffering
+      setTimeout(() => {
+        if (onSave) {
+          onSave();
+        }
+      }, 200);
+      
       toast({
         title: "Success",
         description: "Estimate saved and synced to Inward record",
@@ -217,10 +254,23 @@ const EstimateDialog = ({ record, open, onClose }: EstimateDialogProps) => {
     if (!isSaved) {
       handleSave();
     }
-    setTimeout(() => window.print(), 100);
+    
+    // Set document title for filename
+    const originalTitle = document.title;
+    const jobId = record.jobId || 'Unknown';
+    const estimateNum = estimateNumber || 'Estimate';
+    document.title = `${jobId}_${estimateNum}`;
+    
+    setTimeout(() => {
+      window.print();
+      // Restore original title after print
+      setTimeout(() => {
+        document.title = originalTitle;
+      }, 1000);
+    }, 100);
   };
 
-  if (!hardDisk) return null;
+  if (!record) return null;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -230,6 +280,16 @@ const EstimateDialog = ({ record, open, onClose }: EstimateDialogProps) => {
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Hard Disk Not Found Warning */}
+          {!hardDisk && (
+            <Alert variant="destructive" className="print:hidden">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Hard Disk Record not found for Job ID: {record.jobId}. Please ensure the Hard Disk Record exists before generating an estimate.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Validation Errors */}
           {validationErrors.length > 0 && (
             <Alert variant="destructive" className="print:hidden">

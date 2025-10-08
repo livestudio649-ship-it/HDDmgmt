@@ -32,8 +32,9 @@ const Inward = () => {
   }, []);
 
   const loadRecords = () => {
+    // Force a fresh read from localStorage
     const data = getInwardRecords();
-    setRecords(data);
+    setRecords([...data]); // Create new array reference to force re-render
   };
 
   const filteredRecords = records.filter((record) => {
@@ -160,6 +161,7 @@ const Inward = () => {
             record={selectedRecord}
             open={!!selectedRecord}
             onClose={() => setSelectedRecord(null)}
+            onSave={loadRecords}
           />
         )}
       </div>

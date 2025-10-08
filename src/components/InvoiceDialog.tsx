@@ -66,17 +66,22 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
         setInvoiceNumber(generateNextInvoiceNumber());
         setIsSaved(false);
 
-        // Check if estimate exists and use its amount
-        const existingEstimate = getEstimateByJobId(record.jobId);
-        if (existingEstimate) {
-          // Use the subtotal from the estimate (amount before GST)
-          setAmount(existingEstimate.subtotal);
+        // Use final estimated amount from Hard Disk Record (primary source)
+        if (hardDisk?.estimatedAmount) {
+          setAmount(hardDisk.estimatedAmount);
         } else {
-          // Fallback: check inward records for manual amount
-          const inwardRecords = getInwardRecords();
-          const inward = inwardRecords.find((i) => i.jobId === record.jobId);
-          if (inward?.manualAmount) {
-            setAmount(inward.manualAmount);
+          // Fallback: check if estimate exists and use its amount
+          const existingEstimate = getEstimateByJobId(record.jobId);
+          if (existingEstimate) {
+            // Use the subtotal from the estimate (amount before GST)
+            setAmount(existingEstimate.subtotal);
+          } else {
+            // Final fallback: check inward records for manual amount
+            const inwardRecords = getInwardRecords();
+            const inward = inwardRecords.find((i) => i.jobId === record.jobId);
+            if (inward?.manualAmount) {
+              setAmount(inward.manualAmount);
+            }
           }
         }
 
@@ -177,7 +182,20 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
     if (!isSaved) {
       handleSave();
     }
-    setTimeout(() => window.print(), 100);
+    
+    // Set document title for filename
+    const originalTitle = document.title;
+    const jobId = record.jobId || 'Unknown';
+    const invoiceNum = invoiceNumber || 'Invoice';
+    document.title = `${jobId}_${invoiceNum}`;
+    
+    setTimeout(() => {
+      window.print();
+      // Restore original title after print
+      setTimeout(() => {
+        document.title = originalTitle;
+      }, 1000);
+    }, 100);
   };
 
   if (!hardDisk) return null;
@@ -207,7 +225,7 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
           {/* Amount and Terms Input - Hidden on Print */}
           <div className="space-y-4 print:hidden">
             <div className="space-y-2">
-              <Label htmlFor="amount">Service Amount (before GST)</Label>
+              <Label htmlFor="amount">Final Service Amount (before GST)</Label>
               <Input
                 id="amount"
                 type="number"
@@ -216,7 +234,14 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
                   setAmount(parseFloat(e.target.value) || 0);
                   setIsSaved(false); // Allow re-saving after changes
                 }}
+                placeholder="Enter final amount for this service"
               />
+              <p className="text-xs text-muted-foreground">
+                {hardDisk?.estimatedAmount ? 
+                  `Auto-filled from Hard Disk Record: ₹${hardDisk.estimatedAmount.toLocaleString()}` : 
+                  'No estimated amount found in Hard Disk Record'
+                }
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="customTerms">Terms & Conditions (Optional - Override Default)</Label>

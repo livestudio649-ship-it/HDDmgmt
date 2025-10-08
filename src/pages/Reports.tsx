@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,13 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { FileDown, Search, Calendar, TrendingUp, Package, Clock, CheckCircle2, AlertCircle, Eye, X, Download, Upload, Trash2, Shield } from 'lucide-react';
-import { getDeliveryReports, exportAllData, importData, clearAllData } from '@/lib/storage';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { FileDown, Search, Calendar, TrendingUp, Package, Clock, CheckCircle2, AlertCircle, Eye, X, Upload, Download, Trash2, Database, RefreshCw } from 'lucide-react';
+import { getDeliveryReports, getBackupJobData, saveBackupJobData, importBackupJobData, exportBackupJobData, clearBackupJobData, autoSyncBackupJobData, deleteSelectedBackupJobData, BackupJobData } from '@/lib/storage';
 import { DELIVERY_MODE_OPTIONS, STATUS_CONFIG, RECORD_STATUS } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
 import { Badge } from '@/components/ui/badge';
-import DataPasswordModal from '@/components/DataPasswordModal';
-import { toast } from 'sonner';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface DeliveryReport {
   id: number;
@@ -47,15 +47,32 @@ const Reports = () => {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [detailDialogType, setDetailDialogType] = useState<'delivered' | 'completed' | 'in_progress' | 'pending'>('delivered');
   const [detailDialogRecords, setDetailDialogRecords] = useState<DeliveryReport[]>([]);
-
-  // Data management state
-  const [importing, setImporting] = useState(false);
-  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<'export' | 'import' | 'clear' | null>(null);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  
+  // Data tab state
+  const [backupJobData, setBackupJobData] = useState<BackupJobData[]>([]);
+  const [dataSearchTerm, setDataSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('reports');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Selection state
+  const [selectedRecords, setSelectedRecords] = useState<Set<number>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
   useEffect(() => {
     loadReports();
+    loadBackupData();
+    
+    // Auto-sync on first load if backup data is empty
+    const currentBackupData = getBackupJobData();
+    if (currentBackupData.length === 0) {
+      const result = autoSyncBackupJobData();
+      if (result.success && result.count > 0) {
+        // Reload backup data after auto-sync
+        setTimeout(() => {
+          loadBackupData();
+        }, 100);
+      }
+    }
   }, []);
 
   // Auto-set date range based on type
@@ -103,102 +120,20 @@ const Reports = () => {
     }
   }, [dateRangeType]);
 
+  // Clear selections when data changes
+  useEffect(() => {
+    setSelectedRecords(new Set());
+    setSelectAll(false);
+  }, [dataSearchTerm, backupJobData]);
+
   const loadReports = () => {
     const data = getDeliveryReports();
     setReports(data);
   };
 
-  // Data management functions
-  const requestExport = () => {
-    setPendingAction('export');
-    setPasswordModalOpen(true);
-  };
-
-  const requestImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    
-    setPendingFile(file);
-    setPendingAction('import');
-    setPasswordModalOpen(true);
-    
-    // Reset the input
-    event.target.value = '';
-  };
-
-  const requestClear = () => {
-    setPendingAction('clear');
-    setPasswordModalOpen(true);
-  };
-
-  const handlePasswordSuccess = () => {
-    setPasswordModalOpen(false);
-    
-    if (pendingAction === 'export') {
-      handleExport();
-    } else if (pendingAction === 'import' && pendingFile) {
-      handleImport(pendingFile);
-    } else if (pendingAction === 'clear') {
-      handleClearAll();
-    }
-    
-    // Reset pending states
-    setPendingAction(null);
-    setPendingFile(null);
-  };
-
-  const handlePasswordCancel = () => {
-    setPasswordModalOpen(false);
-    setPendingAction(null);
-    setPendingFile(null);
-  };
-
-  const handleExport = () => {
-    try {
-      const data = exportAllData();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `data-recovery-backup-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success('Data exported successfully');
-    } catch (error) {
-      toast.error('Failed to export data');
-    }
-  };
-
-  const handleImport = (file: File) => {
-    setImporting(true);
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string);
-        importData(data);
-        toast.success('Data imported successfully');
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      } catch (error) {
-        toast.error('Invalid file format');
-      } finally {
-        setImporting(false);
-      }
-    };
-
-    reader.readAsText(file);
-  };
-
-  const handleClearAll = () => {
-    clearAllData();
-    toast.success('All data cleared');
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
+  const loadBackupData = () => {
+    const data = getBackupJobData();
+    setBackupJobData(data);
   };
 
   // Calculate filtered reports with search and filters
@@ -261,6 +196,121 @@ const Reports = () => {
       totalRevenue,
     };
   }, [reports, dateFrom, dateTo]);
+
+  // Calculate filtered backup data
+  const filteredBackupData = useMemo(() => {
+    return backupJobData.filter((data) => {
+      const search = dataSearchTerm.toLowerCase();
+      return (
+        data.jobId.toLowerCase().includes(search) ||
+        data.customerName.toLowerCase().includes(search) ||
+        data.phoneNumber.includes(search) ||
+        data.deviceInfo.toLowerCase().includes(search) ||
+        data.serialNumber.toLowerCase().includes(search)
+      );
+    });
+  }, [backupJobData, dataSearchTerm]);
+
+  // Data management functions
+  const handleImportData = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const jsonData = JSON.parse(e.target?.result as string);
+        const dataArray = Array.isArray(jsonData) ? jsonData : jsonData.backupJobData || [];
+        
+        const result = importBackupJobData(dataArray);
+        if (result.success) {
+          loadBackupData();
+          alert(`Successfully imported ${result.count} records!`);
+        } else {
+          alert(`Import failed: ${result.error}`);
+        }
+      } catch (error) {
+        alert('Invalid JSON file format');
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleExportData = () => {
+    const exportData = exportBackupJobData();
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `backup-job-data-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleClearData = () => {
+    if (confirm('Are you sure you want to clear all backup job data? This action cannot be undone.')) {
+      clearBackupJobData();
+      loadBackupData();
+      alert('All backup job data has been cleared.');
+    }
+  };
+
+
+  // Selection handlers
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedRecords(new Set());
+      setSelectAll(false);
+    } else {
+      const allIds = new Set(filteredBackupData.map(record => record.id));
+      setSelectedRecords(allIds);
+      setSelectAll(true);
+    }
+  };
+
+  const handleSelectRecord = (id: number) => {
+    const newSelected = new Set(selectedRecords);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedRecords(newSelected);
+    setSelectAll(newSelected.size === filteredBackupData.length && filteredBackupData.length > 0);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedRecords.size === 0) return;
+    
+    const selectedData = backupJobData.filter(record => selectedRecords.has(record.id));
+    const jobIds = selectedData.map(record => record.jobId).join(', ');
+    
+    const confirmMessage = `Are you sure you want to delete ${selectedRecords.size} selected record(s)?\n\nThis will permanently remove:\n- Backup job data records\n- Corresponding Hard Disk Records\n- Related Inward and Outward records\n\nJob IDs to be deleted: ${jobIds}\n\nThis action cannot be undone.`;
+    
+    if (confirm(confirmMessage)) {
+      const result = deleteSelectedBackupJobData(Array.from(selectedRecords));
+      if (result.success) {
+        loadBackupData();
+        loadReports(); // Reload reports to reflect changes
+        setSelectedRecords(new Set());
+        setSelectAll(false);
+        alert(`Successfully deleted ${result.count} record(s) and their corresponding Hard Disk Records.\n\nDeleted Job IDs: ${result.deletedJobIds.join(', ')}`);
+      } else {
+        alert(`Delete failed: ${result.error}`);
+      }
+    }
+  };
 
   // Open detail dialog with filtered records
   const openDetailDialog = (type: 'delivered' | 'completed' | 'in_progress' | 'pending') => {
@@ -387,9 +437,23 @@ const Reports = () => {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h2 className="text-3xl font-bold text-foreground">Delivery Reports</h2>
-          <p className="text-muted-foreground">Track and analyze delivery status, modes, and history</p>
+          <h2 className="text-3xl font-bold text-foreground">Reports & Data Management</h2>
+          <p className="text-muted-foreground">Track delivery reports and manage backup job data</p>
         </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="reports" className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Reports
+            </TabsTrigger>
+            <TabsTrigger value="data" className="flex items-center gap-2">
+              <Database className="w-4 h-4" />
+              Data Management
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="reports" className="space-y-6">
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -424,95 +488,6 @@ const Reports = () => {
             );
           })}
         </div>
-
-        {/* Data Management Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-blue-600" />
-              Database Management
-            </CardTitle>
-            <CardDescription>
-              Export, import, and manage your complete database records
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Export Data */}
-              <div className="space-y-3">
-                <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Download className="w-4 h-4 text-green-600" />
-                    <span className="font-medium text-green-900 dark:text-green-100 text-sm">Export Database</span>
-                  </div>
-                  <p className="text-xs text-green-700 dark:text-green-300 mb-3">
-                    Download complete backup of all records, customers, and settings
-                  </p>
-                  <Button onClick={requestExport} size="sm" className="w-full bg-green-600 hover:bg-green-700">
-                    <Download className="w-3 h-3 mr-2" />
-                    Export All Data
-                  </Button>
-                </div>
-              </div>
-
-              {/* Import Data */}
-              <div className="space-y-3">
-                <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Upload className="w-4 h-4 text-blue-600" />
-                    <span className="font-medium text-blue-900 dark:text-blue-100 text-sm">Import Database</span>
-                  </div>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
-                    Restore from backup file (overwrites existing data)
-                  </p>
-                  <div>
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={requestImport}
-                      className="hidden"
-                      id="reports-import-file"
-                    />
-                    <Button asChild size="sm" className="w-full bg-blue-600 hover:bg-blue-700" disabled={importing}>
-                      <label htmlFor="reports-import-file" className="cursor-pointer">
-                        <Upload className="w-3 h-3 mr-2" />
-                        {importing ? 'Importing...' : 'Import Data'}
-                      </label>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Clear Data */}
-              <div className="space-y-3">
-                <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Trash2 className="w-4 h-4 text-red-600" />
-                    <span className="font-medium text-red-900 dark:text-red-100 text-sm">Clear Database</span>
-                  </div>
-                  <p className="text-xs text-red-700 dark:text-red-300 mb-3">
-                    Permanently delete all records and reset system
-                  </p>
-                  <Button onClick={requestClear} size="sm" variant="destructive" className="w-full">
-                    <Trash2 className="w-3 h-3 mr-2" />
-                    Clear All Data
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Security Notice */}
-            <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
-              <p className="text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
-                <Shield className="w-3 h-3 mt-0.5 flex-shrink-0 text-amber-600" />
-                <span>
-                  <strong>Security Protected:</strong> All database operations require master password verification. 
-                  Contact Swaz Data Recovery Labs (+919701087446) for password assistance.
-                </span>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Date Range & Filters */}
         <Card>
@@ -725,12 +700,186 @@ const Reports = () => {
             </div>
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="data" className="space-y-6">
+            {/* Data Management Interface */}
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Database className="w-5 h-5" />
+                      Backup Job Data Management
+                    </CardTitle>
+                    <CardDescription>
+                      Import, export, and manage complete backup job ID data
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleImportData} variant="outline" size="sm">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import
+                    </Button>
+                    <Button onClick={handleExportData} variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export
+                    </Button>
+                    <Button 
+                      onClick={handleDeleteSelected} 
+                      variant="destructive" 
+                      size="sm"
+                      disabled={selectedRecords.size === 0}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Selected ({selectedRecords.size})
+                    </Button>
+                    <Button 
+                      onClick={handleClearData} 
+                      variant="outline" 
+                      size="sm"
+                      disabled={true}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Clear All
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Search */}
+                <div className="flex items-center gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search job ID, customer, phone, device..."
+                      value={dataSearchTerm}
+                      onChange={(e) => setDataSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {filteredBackupData.length} of {backupJobData.length} records
+                  </div>
+                </div>
+
+                {/* Data Table */}
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectAll}
+                            onCheckedChange={handleSelectAll}
+                            disabled={filteredBackupData.length === 0}
+                          />
+                        </TableHead>
+                        <TableHead>Job ID</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Device Info</TableHead>
+                        <TableHead>Serial Number</TableHead>
+                        <TableHead>Complaint</TableHead>
+                        <TableHead>Received Date</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Created</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredBackupData.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                            {backupJobData.length === 0 
+                              ? 'No backup job data found. Import data to get started.' 
+                              : 'No records match your search criteria.'
+                            }
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredBackupData.map((data) => (
+                          <TableRow key={data.id} className={selectedRecords.has(data.id) ? 'bg-muted/50' : ''}>
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedRecords.has(data.id)}
+                                onCheckedChange={() => handleSelectRecord(data.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">{data.jobId}</TableCell>
+                            <TableCell>{data.customerName}</TableCell>
+                            <TableCell>{data.phoneNumber}</TableCell>
+                            <TableCell>{data.deviceInfo}</TableCell>
+                            <TableCell className="text-sm">{data.serialNumber}</TableCell>
+                            <TableCell className="text-sm max-w-xs truncate" title={data.complaint}>
+                              {data.complaint}
+                            </TableCell>
+                            <TableCell>{new Date(data.receivedDate).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              {data.estimatedAmount ? `₹${data.estimatedAmount.toLocaleString()}` : 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                className={STATUS_CONFIG[data.status as keyof typeof STATUS_CONFIG]?.color}
+                              >
+                                {STATUS_CONFIG[data.status as keyof typeof STATUS_CONFIG]?.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {new Date(data.createdAt).toLocaleDateString()}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Summary Stats */}
+                {backupJobData.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-foreground">{backupJobData.length}</div>
+                      <div className="text-sm text-muted-foreground">Total Records</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {backupJobData.filter(d => d.status === RECORD_STATUS.COMPLETED).length}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Completed</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-yellow-600">
+                        {backupJobData.filter(d => d.status === RECORD_STATUS.IN_PROGRESS).length}
+                      </div>
+                      <div className="text-sm text-muted-foreground">In Progress</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {backupJobData.filter(d => d.status === RECORD_STATUS.PENDING).length}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Pending</div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Hidden file input for import */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileImport}
+          accept=".json"
+          style={{ display: 'none' }}
+        />
       </div>
 
       {/* Detail Dialog */}
-      {detailDialogOpen && (
-        <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-          <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {detailDialogType === 'delivered' && (
@@ -909,16 +1058,6 @@ const Reports = () => {
           </div>
         </DialogContent>
       </Dialog>
-      )}
-
-      {/* Password Modal */}
-      <DataPasswordModal
-        open={passwordModalOpen}
-        onClose={handlePasswordCancel}
-        onSuccess={handlePasswordSuccess}
-        action={pendingAction || 'export'}
-      />
-      </div>
     </DashboardLayout>
   );
 };

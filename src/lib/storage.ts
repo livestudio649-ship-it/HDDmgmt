@@ -158,6 +158,7 @@ const STORAGE_KEYS = {
   AUTH_PASSWORD: 'authPassword',
   MASTER_CUSTOMERS: 'masterCustomers',
   COMPANY_MASTER_PASSWORD: 'companyMasterPassword',
+  BACKUP_JOB_DATA: 'backupJobData',
 };
 
 // Hard Disk Records
@@ -210,7 +211,18 @@ export const saveJobCounter = (counter: number) => {
   localStorage.setItem(STORAGE_KEYS.JOB_COUNTER, counter.toString());
 };
 
-// Generate next Job ID
+// Preview next Job ID without incrementing counter
+export const previewNextJobId = (): string => {
+  const counter = getJobCounter() + 1;
+  return `JOB${counter.toString().padStart(3, '0')}`;
+};
+
+// Reset Job ID counter to start from 01
+export const resetJobIdCounter = () => {
+  saveJobCounter(0);
+};
+
+// Generate next Job ID and increment counter (only call when record is saved)
 export const generateNextJobId = (): string => {
   const counter = getJobCounter() + 1;
   saveJobCounter(counter);
@@ -795,4 +807,206 @@ export const getDeliveryReports = () => {
     estimatedAmount: record.estimatedAmount,
     status: record.status,
   }));
+};
+
+// Backup Job Data Management
+export interface BackupJobData {
+  id: number;
+  jobId: string;
+  customerName: string;
+  phoneNumber: string;
+  deviceInfo: string;
+  serialNumber: string;
+  complaint: string;
+  receivedDate: string;
+  estimatedAmount?: number;
+  status: RecordStatus;
+  createdAt: string;
+  notes?: string;
+}
+
+// Get backup job data
+export const getBackupJobData = (): BackupJobData[] => {
+  const data = localStorage.getItem(STORAGE_KEYS.BACKUP_JOB_DATA);
+  return data ? JSON.parse(data) : [];
+};
+
+// Save backup job data
+export const saveBackupJobData = (data: BackupJobData[]) => {
+  localStorage.setItem(STORAGE_KEYS.BACKUP_JOB_DATA, JSON.stringify(data));
+};
+
+// Add backup job data entry
+export const addBackupJobData = (jobData: Omit<BackupJobData, 'id' | 'createdAt'>): BackupJobData => {
+  const backupData = getBackupJobData();
+  const newEntry: BackupJobData = {
+    ...jobData,
+    id: Date.now(),
+    createdAt: new Date().toISOString(),
+  };
+  backupData.push(newEntry);
+  saveBackupJobData(backupData);
+  return newEntry;
+};
+
+// Import backup job data from JSON
+export const importBackupJobData = (jsonData: any[]): { success: boolean; count: number; error?: string } => {
+  try {
+    const existingData = getBackupJobData();
+    const importedData: BackupJobData[] = jsonData.map((item, index) => ({
+      id: Date.now() + index,
+      jobId: item.jobId || `IMPORTED-${Date.now()}-${index}`,
+      customerName: item.customerName || 'Unknown Customer',
+      phoneNumber: item.phoneNumber || '',
+      deviceInfo: item.deviceInfo || 'Unknown Device',
+      serialNumber: item.serialNumber || '',
+      complaint: item.complaint || 'No complaint specified',
+      receivedDate: item.receivedDate || new Date().toISOString().split('T')[0],
+      estimatedAmount: item.estimatedAmount ? Number(item.estimatedAmount) : undefined,
+      status: item.status || RECORD_STATUS.PENDING,
+      createdAt: item.createdAt || new Date().toISOString(),
+      notes: item.notes || '',
+    }));
+    
+    const combinedData = [...existingData, ...importedData];
+    saveBackupJobData(combinedData);
+    
+    return { success: true, count: importedData.length };
+  } catch (error) {
+    return { success: false, count: 0, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
+// Export backup job data to JSON
+export const exportBackupJobData = () => {
+  const data = getBackupJobData();
+  return {
+    backupJobData: data,
+    exportDate: new Date().toISOString(),
+    totalRecords: data.length,
+  };
+};
+
+// Clear all backup job data
+export const clearBackupJobData = () => {
+  localStorage.removeItem(STORAGE_KEYS.BACKUP_JOB_DATA);
+};
+
+// Auto-sync backup job data from existing hard disk records
+export const autoSyncBackupJobData = (): { success: boolean; count: number; error?: string } => {
+  try {
+    const hardDiskRecords = getHardDiskRecords();
+    const existingBackupData = getBackupJobData();
+    
+    // Get existing job IDs to avoid duplicates
+    const existingJobIds = new Set(existingBackupData.map(d => d.jobId));
+    
+    // Convert hard disk records to backup job data format
+    const newBackupData: BackupJobData[] = hardDiskRecords
+      .filter(record => !existingJobIds.has(record.jobId)) // Only add new records
+      .map(record => ({
+        id: Date.now() + Math.random(),
+        jobId: record.jobId,
+        customerName: record.customerName,
+        phoneNumber: record.phoneNumber,
+        deviceInfo: `${record.model} ${record.capacity}`,
+        serialNumber: record.serialNumber,
+        complaint: record.complaint,
+        receivedDate: record.receivedDate,
+        estimatedAmount: record.estimatedAmount,
+        status: record.status || RECORD_STATUS.PENDING,
+        createdAt: record.createdAt,
+        notes: `Auto-synced from hard disk record`,
+      }));
+    
+    // Combine existing and new data
+    const combinedData = [...existingBackupData, ...newBackupData];
+    saveBackupJobData(combinedData);
+    
+    return { success: true, count: newBackupData.length };
+  } catch (error) {
+    return { success: false, count: 0, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
+// Clear all Outward records
+export const clearAllOutwardRecords = (): { success: boolean; error?: string } => {
+  try {
+    saveOutwardRecords([]);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
+// Delete specific Job ID from all records
+export const deleteJobIdFromAllRecords = (jobId: string): { success: boolean; error?: string } => {
+  try {
+    // Remove from Hard Disk Records
+    const hardDiskRecords = getHardDiskRecords();
+    const updatedHardDiskRecords = hardDiskRecords.filter(record => record.jobId !== jobId);
+    saveHardDiskRecords(updatedHardDiskRecords);
+    
+    // Remove from Inward Records
+    const inwardRecords = getInwardRecords();
+    const updatedInwardRecords = inwardRecords.filter(record => record.jobId !== jobId);
+    saveInwardRecords(updatedInwardRecords);
+    
+    // Remove from Outward Records
+    const outwardRecords = getOutwardRecords();
+    const updatedOutwardRecords = outwardRecords.filter(record => record.jobId !== jobId);
+    saveOutwardRecords(updatedOutwardRecords);
+    
+    // Remove from Backup Job Data
+    const backupJobData = getBackupJobData();
+    const updatedBackupJobData = backupJobData.filter(record => record.jobId !== jobId);
+    saveBackupJobData(updatedBackupJobData);
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
+// Delete selected backup job data and corresponding hard disk records
+export const deleteSelectedBackupJobData = (selectedIds: number[]): { success: boolean; count: number; deletedJobIds: string[]; error?: string } => {
+  try {
+    const backupData = getBackupJobData();
+    const hardDiskRecords = getHardDiskRecords();
+    const inwardRecords = getInwardRecords();
+    const outwardRecords = getOutwardRecords();
+    
+    // Find records to delete and get their job IDs
+    const recordsToDelete = backupData.filter(record => selectedIds.includes(record.id));
+    const jobIdsToDelete = recordsToDelete.map(record => record.jobId);
+    
+    // Remove from backup job data
+    const updatedBackupData = backupData.filter(record => !selectedIds.includes(record.id));
+    saveBackupJobData(updatedBackupData);
+    
+    // Remove corresponding hard disk records
+    const updatedHardDiskRecords = hardDiskRecords.filter(record => !jobIdsToDelete.includes(record.jobId));
+    saveHardDiskRecords(updatedHardDiskRecords);
+    
+    // Remove corresponding inward records
+    const updatedInwardRecords = inwardRecords.filter(record => !jobIdsToDelete.includes(record.jobId));
+    saveInwardRecords(updatedInwardRecords);
+    
+    // Remove corresponding outward records
+    const updatedOutwardRecords = outwardRecords.filter(record => !jobIdsToDelete.includes(record.jobId));
+    saveOutwardRecords(updatedOutwardRecords);
+    
+    return { 
+      success: true, 
+      count: recordsToDelete.length, 
+      deletedJobIds: jobIdsToDelete 
+    };
+  } catch (error) {
+    return { 
+      success: false, 
+      count: 0, 
+      deletedJobIds: [], 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
 };

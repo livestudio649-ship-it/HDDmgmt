@@ -374,8 +374,21 @@ const Settings = () => {
                     <Label htmlFor="phone">Phone Number *</Label>
                     <Input
                       id="phone"
+                      type="tel"
                       value={companyDetails.phone}
-                      onChange={(e) => setCompanyDetails({ ...companyDetails, phone: e.target.value })}
+                      onChange={(e) => {
+                        // Only allow numeric characters
+                        const numericValue = e.target.value.replace(/[^0-9]/g, '');
+                        setCompanyDetails({ ...companyDetails, phone: numericValue });
+                      }}
+                      onKeyPress={(e) => {
+                        // Prevent non-numeric characters from being typed
+                        if (!/[0-9]/.test(e.key) && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab') {
+                          e.preventDefault();
+                        }
+                      }}
+                      placeholder="Enter phone number (numbers only)"
+                      maxLength={15}
                       disabled={!isCompanyDetailsUnlocked}
                     />
                   </div>
