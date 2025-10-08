@@ -259,7 +259,7 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
           </div>
 
           {/* A4 Print Area */}
-          <div id="invoice-print" className="bg-white text-black print:p-0" style={{ width: '210mm', padding: '20mm', boxSizing: 'border-box' }}>
+          <div id="invoice-print" className="bg-white text-black print:p-0" style={{ width: '210mm', padding: '15mm', boxSizing: 'border-box' }}>
             {/* Company Header with Logo */}
             <div className="text-center mb-8 pb-6 border-b-2 border-gray-800">
               <LogoImage className="mx-auto mb-4 h-20" alt={`${companyDetails.companyName} Logo`} />
@@ -438,13 +438,35 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
             {/* Payment Terms & Bank Details */}
             <div className="mb-8 bg-blue-50 border-l-4 border-blue-600 p-6 rounded">
               <h3 className="font-bold text-gray-900 mb-3 text-lg uppercase tracking-wide">Payment Information</h3>
-              <div className="space-y-2 text-sm text-gray-800">
-                <p><span className="font-semibold">Payment Terms:</span> Due within 30 days from invoice date</p>
-                <p><span className="font-semibold">Accepted Methods:</span> Bank Transfer, UPI, Cheque</p>
-                <p className="text-xs text-gray-600 mt-3 italic">
-                  Bank details will be shared upon request. Please include Invoice Number in payment reference.
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-800">
+                <div className="space-y-2">
+                  <p><span className="font-semibold">Payment Terms:</span> Due within 30 days from invoice date</p>
+                  <p><span className="font-semibold">Accepted Methods:</span> Bank Transfer, UPI, Cheque</p>
+                </div>
+                {(companyDetails.bankAccountName || companyDetails.bankAccountNumber || companyDetails.bankName || companyDetails.bankIFSC) && (
+                  <div className="space-y-1">
+                    <h4 className="font-semibold text-gray-900 mb-2">Bank Details:</h4>
+                    {companyDetails.bankAccountName && (
+                      <p><span className="font-medium">Account Name:</span> {companyDetails.bankAccountName}</p>
+                    )}
+                    {companyDetails.bankAccountNumber && (
+                      <p><span className="font-medium">Account Number:</span> {companyDetails.bankAccountNumber}</p>
+                    )}
+                    {companyDetails.bankName && (
+                      <p><span className="font-medium">Bank Name:</span> {companyDetails.bankName}</p>
+                    )}
+                    {companyDetails.bankBranch && (
+                      <p><span className="font-medium">Branch:</span> {companyDetails.bankBranch}</p>
+                    )}
+                    {companyDetails.bankIFSC && (
+                      <p><span className="font-medium">IFSC Code:</span> {companyDetails.bankIFSC}</p>
+                    )}
+                  </div>
+                )}
               </div>
+              <p className="text-xs text-gray-600 mt-3 italic">
+                Please include Invoice Number in payment reference.
+              </p>
             </div>
 
             {/* Terms & Conditions */}
@@ -514,10 +536,26 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
               margin: 0;
             }
             
+            @page:blank {
+              display: none !important;
+            }
+            
+            /* Completely prevent page 2 */
+            @page:nth(2) {
+              display: none !important;
+              size: 0 !important;
+            }
+            
             * {
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
               color-adjust: exact !important;
+              page-break-after: avoid !important;
+              page-break-before: avoid !important;
+              page-break-inside: avoid !important;
+              break-after: avoid !important;
+              break-before: avoid !important;
+              break-inside: avoid !important;
             }
             
             /* Hide everything by default */
@@ -567,20 +605,51 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
               display: block !important;
               position: static !important;
               width: 210mm !important;
-              height: auto !important;
-              max-width: 210mm !important;
-              padding: 8mm 12mm !important;
+              padding: 8mm !important;
               margin: 0 !important;
-              background: white !important;
-              color: black !important;
               box-sizing: border-box !important;
-              page-break-after: avoid !important;
+              font-size: 7pt !important;
+              line-height: 1.0 !important;
               page-break-inside: avoid !important;
-              transform: none !important;
-              -webkit-transform: none !important;
-              font-size: 8pt !important;
-              line-height: 1.2 !important;
+              page-break-after: avoid !important;
+              page-break-before: avoid !important;
+              break-after: avoid !important;
+              break-before: avoid !important;
+              break-inside: avoid !important;
               overflow: hidden !important;
+              max-height: 275mm !important;
+              height: 275mm !important;
+              contain: layout style paint !important;
+            }
+            
+            /* Absolutely prevent any page breaks */
+            #invoice-print,
+            #invoice-print *,
+            #invoice-print *:before,
+            #invoice-print *:after {
+              page-break-after: avoid !important;
+              page-break-before: avoid !important;
+              page-break-inside: avoid !important;
+              break-after: avoid !important;
+              break-before: avoid !important;
+              break-inside: avoid !important;
+              orphans: 1000 !important;
+              widows: 1000 !important;
+            }
+            
+            /* Force all content to fit on page 1 */
+            #invoice-print > * {
+              margin-bottom: 0 !important;
+              padding-bottom: 0 !important;
+              max-height: none !important;
+              overflow: visible !important;
+            }
+            
+            /* Completely hide any overflow content */
+            #invoice-print > *:last-child {
+              margin-bottom: 0 !important;
+              padding-bottom: 0 !important;
+              border-bottom: none !important;
             }
             
             /* Reset transforms on all print content */
@@ -685,65 +754,65 @@ const InvoiceDialog = ({ record, open, onClose }: InvoiceDialogProps) => {
             
             /* Ultra-compact spacing for print */
             #invoice-print .mb-8 {
-              margin-bottom: 4pt !important;
+              margin-bottom: 2pt !important;
             }
             
             #invoice-print .mb-6 {
-              margin-bottom: 3pt !important;
+              margin-bottom: 1.5pt !important;
             }
             
             #invoice-print .mb-4 {
-              margin-bottom: 2pt !important;
-            }
-            
-            #invoice-print .mb-3 {
-              margin-bottom: 2pt !important;
-            }
-            
-            #invoice-print .mb-2 {
               margin-bottom: 1pt !important;
             }
             
+            #invoice-print .mb-3 {
+              margin-bottom: 1pt !important;
+            }
+            
+            #invoice-print .mb-2 {
+              margin-bottom: 0.5pt !important;
+            }
+            
             #invoice-print .pb-6 {
-              padding-bottom: 2pt !important;
+              padding-bottom: 1pt !important;
             }
             
             #invoice-print .p-6 {
-              padding: 3pt !important;
+              padding: 1.5pt !important;
             }
             
             #invoice-print .p-4 {
-              padding: 2pt !important;
-            }
-            
-            #invoice-print .p-3 {
-              padding: 2pt !important;
-            }
-            
-            #invoice-print .p-2 {
               padding: 1pt !important;
             }
             
+            #invoice-print .p-3 {
+              padding: 1pt !important;
+            }
+            
+            #invoice-print .p-2 {
+              padding: 0.5pt !important;
+            }
+            
             #invoice-print .py-3 {
-              padding-top: 2pt !important;
-              padding-bottom: 2pt !important;
+              padding-top: 1pt !important;
+              padding-bottom: 1pt !important;
             }
             
             #invoice-print .px-4 {
-              padding-left: 2pt !important;
-              padding-right: 2pt !important;
+              padding-left: 1pt !important;
+              padding-right: 1pt !important;
             }
             
             #invoice-print .mt-16 {
-              margin-top: 6pt !important;
-            }
-            
-            #invoice-print .mt-8 {
               margin-top: 3pt !important;
             }
             
-            #invoice-print .mt-4 {
+            #invoice-print .mt-8 {
               margin-top: 2pt !important;
+            }
+            
+            #invoice-print .mt-4 {
+              margin-top: 1pt !important;
             }
             
             #invoice-print .mt-3 {

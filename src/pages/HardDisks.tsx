@@ -20,8 +20,7 @@ import {
   saveHardDiskRecordWithSync,
   getMasterCustomers,
   getMasterRecordData,
-  deleteJobIdFromAllRecords,
-  clearAllOutwardRecords,
+  clearAllRecordsForFreshStart,
   HardDiskRecord,
   DeliveryDetails
 } from '@/lib/storage';
@@ -64,22 +63,18 @@ const HardDisks = () => {
   
 
   useEffect(() => {
-    // Delete JOB004 from all records
-    const deleteResult = deleteJobIdFromAllRecords('JOB004');
-    if (deleteResult.success) {
-      console.log('JOB004 successfully deleted from all records');
-      toast.success('JOB004 has been cleared from all records');
-    } else {
-      console.error('Failed to delete JOB004:', deleteResult.error);
-    }
-
-    // Clear all Outward records
-    const clearResult = clearAllOutwardRecords();
+    // Clear ALL records for fresh start
+    const clearResult = clearAllRecordsForFreshStart();
     if (clearResult.success) {
-      console.log('All Outward records successfully cleared');
-      toast.success('All Outward Job IDs have been cleared');
+      console.log('All records successfully cleared for fresh start');
+      if (clearResult.clearedItems.length > 0) {
+        toast.success(`Fresh start complete! Cleared: ${clearResult.clearedItems.join(', ')}`);
+      } else {
+        toast.success('Fresh start complete! No existing records found.');
+      }
     } else {
-      console.error('Failed to clear Outward records:', clearResult.error);
+      console.error('Failed to clear all records:', clearResult.error);
+      toast.error('Failed to clear all records for fresh start');
     }
     
     loadRecords();

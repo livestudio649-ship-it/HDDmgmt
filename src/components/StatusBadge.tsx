@@ -27,7 +27,14 @@ const StatusBadge = ({
 
   const handleStatusChange = (newStatus: RecordStatus) => {
     updateRecordStatus(jobId, newStatus);
-    toast.success(`Status updated to ${STATUS_CONFIG[newStatus].label}`);
+    
+    // Show different messages based on status change
+    if (newStatus === RECORD_STATUS.COMPLETED) {
+      toast.success(`Status updated to ${STATUS_CONFIG[newStatus].label} - Record automatically added to Outward`);
+    } else {
+      toast.success(`Status updated to ${STATUS_CONFIG[newStatus].label}`);
+    }
+    
     setIsEditing(false);
     if (onStatusChange) {
       // Add a small delay to ensure the status update is processed

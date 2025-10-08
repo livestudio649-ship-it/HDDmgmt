@@ -671,11 +671,12 @@ export const updateRecordStatus = (jobId: string, newStatus: RecordStatus) => {
     saveInwardRecords(inwardRecords);
   }
   
-  // Update Outward record
+  // Update or Create Outward record
   const outwardRecords = getOutwardRecords();
   const outwardIndex = outwardRecords.findIndex(or => or.jobId === jobId);
   
   if (outwardIndex >= 0) {
+    // Update existing outward record
     outwardRecords[outwardIndex] = {
       ...outwardRecords[outwardIndex],
       status: newStatus,
@@ -685,6 +686,29 @@ export const updateRecordStatus = (jobId: string, newStatus: RecordStatus) => {
         : undefined,
     };
     saveOutwardRecords(outwardRecords);
+  } else if (newStatus === RECORD_STATUS.COMPLETED) {
+    // Auto-create outward record when status becomes completed
+    const hardDisk = hardDisks.find(hd => hd.jobId === jobId);
+    const inwardRecord = inwardRecords.find(ir => ir.jobId === jobId);
+    
+    if (hardDisk) {
+      const newOutwardRecord: OutwardRecord = {
+        id: Date.now(),
+        jobId: jobId,
+        date: new Date().toISOString().split('T')[0],
+        deliveredTo: hardDisk.customerName,
+        notes: `Auto-created when status changed to completed`,
+        customerName: hardDisk.customerName,
+        phoneNumber: hardDisk.phoneNumber,
+        isCompleted: true,
+        completedDate: new Date().toISOString().split('T')[0],
+        estimatedAmount: hardDisk.estimatedAmount || inwardRecord?.estimatedAmount,
+        status: RECORD_STATUS.COMPLETED,
+      };
+      
+      outwardRecords.push(newOutwardRecord);
+      saveOutwardRecords(outwardRecords);
+    }
   }
 };
 
@@ -890,6 +914,107 @@ export const exportBackupJobData = () => {
 // Clear all backup job data
 export const clearBackupJobData = () => {
   localStorage.removeItem(STORAGE_KEYS.BACKUP_JOB_DATA);
+};
+
+// Clear only monthly revenue data (estimated amounts) from backup job data
+export const clearMonthlyRevenueData = (): { success: boolean; count: number; error?: string } => {
+  try {
+    const backupData = getBackupJobData();
+    let clearedCount = 0;
+    
+    // Clear estimatedAmount from all records
+    const updatedData = backupData.map(record => {
+      if (record.estimatedAmount && record.estimatedAmount > 0) {
+        clearedCount++;
+        return {
+          ...record,
+          estimatedAmount: undefined // Clear the revenue amount
+        };
+      }
+      return record;
+    });
+    
+    // Save updated data back to storage
+    saveBackupJobData(updatedData);
+    
+    return { success: true, count: clearedCount };
+  } catch (error) {
+    return { success: false, count: 0, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
+// Clear ALL records for fresh start
+export const clearAllRecordsForFreshStart = (): { success: boolean; clearedItems: string[]; error?: string } => {
+  try {
+    const clearedItems: string[] = [];
+    
+    // Clear Hard Disk Records
+    const hardDiskCount = getHardDiskRecords().length;
+    if (hardDiskCount > 0) {
+      localStorage.removeItem(STORAGE_KEYS.HARD_DISK_RECORDS);
+      clearedItems.push(`${hardDiskCount} Hard Disk Records`);
+    }
+    
+    // Clear Inward Records
+    const inwardCount = getInwardRecords().length;
+    if (inwardCount > 0) {
+      localStorage.removeItem(STORAGE_KEYS.INWARD_RECORDS);
+      clearedItems.push(`${inwardCount} Inward Records`);
+    }
+    
+    // Clear Outward Records
+    const outwardCount = getOutwardRecords().length;
+    if (outwardCount > 0) {
+      localStorage.removeItem(STORAGE_KEYS.OUTWARD_RECORDS);
+      clearedItems.push(`${outwardCount} Outward Records`);
+    }
+    
+    // Clear Backup Job Data (Business Analytics)
+    const backupCount = getBackupJobData().length;
+    if (backupCount > 0) {
+      localStorage.removeItem(STORAGE_KEYS.BACKUP_JOB_DATA);
+      clearedItems.push(`${backupCount} Business Analytics Records`);
+    }
+    
+    // Clear Generated Invoices
+    const invoiceCount = getGeneratedInvoices().length;
+    if (invoiceCount > 0) {
+      localStorage.removeItem(STORAGE_KEYS.GENERATED_INVOICES);
+      clearedItems.push(`${invoiceCount} Generated Invoices`);
+    }
+    
+    // Clear Generated Estimates
+    const estimateCount = getGeneratedEstimates().length;
+    if (estimateCount > 0) {
+      localStorage.removeItem(STORAGE_KEYS.GENERATED_ESTIMATES);
+      clearedItems.push(`${estimateCount} Generated Estimates`);
+    }
+    
+    // Clear Delivery Reports (if any exist in reports)
+    try {
+      const deliveryCount = getDeliveryReports().length;
+      if (deliveryCount > 0) {
+        // Delivery reports are derived from outward records, so they'll be cleared when outward records are cleared
+        clearedItems.push(`${deliveryCount} Delivery Reports (derived data)`);
+      }
+    } catch (error) {
+      // Delivery reports might not exist, continue
+    }
+    
+    // Reset Job ID Counter
+    localStorage.removeItem(STORAGE_KEYS.JOB_COUNTER);
+    clearedItems.push('Job ID Counter Reset');
+    
+    // Reset Invoice Counter
+    localStorage.removeItem(STORAGE_KEYS.INVOICE_COUNTER);
+    clearedItems.push('Invoice Counter Reset');
+    
+    // Note: Company details and terms templates are preserved for business continuity
+    
+    return { success: true, clearedItems };
+  } catch (error) {
+    return { success: false, clearedItems: [], error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 };
 
 // Auto-sync backup job data from existing hard disk records
